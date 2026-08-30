@@ -43,6 +43,7 @@ use adw::prelude::*;
 use gtk::glib;
 use renderer::{Align2, FontId, Rect, Stroke, StrokeKind, Vec2, vec2};
 use shrimply_core::timeline_value::{TimelineBool, TimelineValue};
+use shrimply_skia_adw_ui::scheme;
 use shrimply_timeline::{TrackGap, TrackKey};
 
 mod audio_meter;
@@ -364,7 +365,7 @@ pub fn new(
         let painter = match runtime.renderer.begin_frame(
             screen_size_px,
             pixels_per_point,
-            Color::VIEW_BG_DARK,
+            crate::scheme::view_bg(),
         ) {
             Ok(painter) => painter,
             Err(error) => {

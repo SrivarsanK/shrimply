@@ -479,7 +479,7 @@ fn draw_expanded_row_background(
     painter.rect_filled(
         rect(0.0, y, timeline_x + timeline_width, TRACK_HEIGHT),
         0,
-        Color::SIDEBAR_SHADE_DARK.alpha_multiply(0.22),
+        crate::scheme::sidebar_shade().alpha_multiply(0.22),
     );
     let branch_x = timeline_x - 18.0;
     painter.line_segment(
@@ -487,13 +487,13 @@ fn draw_expanded_row_background(
             vec2(branch_x as f32, y as f32),
             vec2(branch_x as f32, (y + TRACK_HEIGHT * 0.5) as f32),
         ],
-        Stroke::new(1.0, Color::SIDEBAR_BORDER_DARK),
+        Stroke::new(1.0, crate::scheme::sidebar_border()),
     );
     painter.line_segment(
         [
             vec2(branch_x as f32, (y + TRACK_HEIGHT * 0.5) as f32),
             vec2((timeline_x - 6.0) as f32, (y + TRACK_HEIGHT * 0.5) as f32),
         ],
-        Stroke::new(1.0, Color::SIDEBAR_BORDER_DARK),
+        Stroke::new(1.0, crate::scheme::sidebar_border()),
     );
 }

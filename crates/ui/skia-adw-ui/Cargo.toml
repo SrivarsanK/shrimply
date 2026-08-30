@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+adw.workspace = true
 hashbrown.workspace = true
 async-channel.workspace = true
 cached.workspace = true

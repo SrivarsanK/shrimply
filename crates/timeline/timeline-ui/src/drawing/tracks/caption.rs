@@ -96,14 +96,14 @@ pub(super) fn draw(input: TrackDrawInput<'_>, first_visible_row: usize, last_vis
             timeline_x,
             y,
             ITEM_BORDER_STROKE_WIDTH,
-            Color::SIDEBAR_BORDER_DARK,
+            crate::scheme::sidebar_border(),
         );
         draw_tiny_item_horizontal_edges(
             painter,
             &tiny_item_outline_columns,
             timeline_x,
             y,
-            Color::SIDEBAR_BORDER_DARK,
+            crate::scheme::sidebar_border(),
         );
         draw_tiny_item_edges(
             painter,

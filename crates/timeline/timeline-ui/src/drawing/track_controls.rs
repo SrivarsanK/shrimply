@@ -13,19 +13,23 @@ pub(super) fn draw_track_label_pane(
         return;
     }
 
-    painter.rect_filled(rect(0.0, 0.0, LABEL_WIDTH, height), 0, Color::VIEW_BG_DARK);
+    painter.rect_filled(
+        rect(0.0, 0.0, LABEL_WIDTH, height),
+        0,
+        crate::scheme::view_bg(),
+    );
     painter.rect_filled(
         rect(0.0, RULER_HEIGHT, LABEL_WIDTH, 1.0),
         0,
-        Color::SIDEBAR_BORDER_DARK,
+        crate::scheme::sidebar_border(),
     );
     painter.rect_filled(
         rect(LABEL_WIDTH - 1.0, 0.0, 1.0, height),
         0,
-        Color::SIDEBAR_BORDER_DARK,
+        crate::scheme::sidebar_border(),
     );
 
-    let icon_color = Color::VIEW_FG_DARK;
+    let icon_color = crate::scheme::view_fg();
     let row_clip = rect(
         0.0,
         RULER_HEIGHT,
@@ -61,7 +65,7 @@ pub(super) fn draw_track_label_pane(
         row_painter.rect_filled(
             rect(0.0, y + TRACK_HEIGHT - 1.0, LABEL_WIDTH, 1.0),
             0,
-            Color::SIDEBAR_SHADE_DARK,
+            crate::scheme::sidebar_shade(),
         );
 
         let prefix = match key.kind {
@@ -172,22 +176,22 @@ pub(super) fn draw_track_label_pane(
             height,
         ),
         0,
-        Color::VIEW_BG_DARK,
+        crate::scheme::view_bg(),
     );
     painter.rect_filled(
         rect(timeline_x() - 1.0, 0.0, 1.0, height),
         0,
-        Color::SIDEBAR_BORDER_DARK,
+        crate::scheme::sidebar_border(),
     );
     painter.rect_filled(
         rect(0.0, 0.0, LABEL_WIDTH, RULER_HEIGHT),
         0,
-        Color::VIEW_BG_DARK,
+        crate::scheme::view_bg(),
     );
     painter.rect_filled(
         rect(0.0, RULER_HEIGHT, LABEL_WIDTH, 1.0),
         0,
-        Color::SIDEBAR_BORDER_DARK,
+        crate::scheme::sidebar_border(),
     );
 }
 
@@ -199,7 +203,7 @@ fn draw_folded_track_label(painter: &TimelinePainter, y: f64, kind: TrackKind, d
     painter.rect_filled(
         rect(0.0, y, LABEL_WIDTH, TRACK_HEIGHT - 1.0),
         0,
-        Color::SIDEBAR_SHADE_DARK.alpha_multiply(0.22),
+        crate::scheme::sidebar_shade().alpha_multiply(0.22),
     );
     painter.line_segment(
         [vec2(branch_x, y as f32), vec2(branch_x, center_y)],
@@ -215,7 +219,7 @@ fn draw_folded_track_label(painter: &TimelinePainter, y: f64, kind: TrackKind, d
     painter.rect_filled(
         rect(0.0, y + TRACK_HEIGHT - 1.0, LABEL_WIDTH, 1.0),
         0,
-        Color::SIDEBAR_SHADE_DARK,
+        crate::scheme::sidebar_shade(),
     );
 }
 

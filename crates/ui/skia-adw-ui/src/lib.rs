@@ -10,6 +10,7 @@ pub mod button;
 pub mod font_grid;
 pub mod icon;
 pub mod math;
+pub mod scheme;
 pub mod slider;
 pub mod spinner;
 

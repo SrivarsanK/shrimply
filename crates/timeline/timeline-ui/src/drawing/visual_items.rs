@@ -72,7 +72,7 @@ pub(in crate::drawing) fn draw_caption_item(
     );
     if !item.text.is_empty() {
         let font_id = FontId::proportional(10.0);
-        let color = Color::VIEW_FG_DARK;
+        let color = crate::scheme::view_fg();
         let max_width = (clip_width - ITEM_PADDING_X * 2.0 - 4.0).max(0.0) as f32;
         painter
             .with_clip_rect(rect(

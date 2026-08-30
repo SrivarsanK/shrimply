@@ -5957,6 +5957,7 @@ dependencies = [
  "async-channel",
  "cached",
  "hashbrown 0.17.1",
+ "libadwaita",
  "shrimply-math-color",
  "shrimply-math-geometry",
  "skia-safe",
