@@ -82,7 +82,7 @@ pub(super) fn new(levels: SharedAudioLevels) -> gtk::GLArea {
         let painter = match runtime.renderer.begin_frame(
             screen_size_px,
             pixels_per_point,
-            crate::scheme::view_bg(),
+            crate::theme::view_bg(),
         ) {
             Ok(painter) => painter,
             Err(error) => {

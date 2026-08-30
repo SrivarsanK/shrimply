@@ -105,11 +105,11 @@ pub(super) fn draw_timeline(input: TimelineInput<'_, '_>) {
         visible_track_height,
     );
 
-    painter.rect_filled(rect(0.0, 0.0, width, height), 0, crate::scheme::view_bg());
+    painter.rect_filled(rect(0.0, 0.0, width, height), 0, crate::theme::view_bg());
     painter.rect_filled(
         rect(0.0, RULER_HEIGHT, width, 1.0),
         0,
-        crate::scheme::sidebar_border(),
+        crate::theme::sidebar_border(),
     );
 
     let timeline_empty = project
@@ -137,7 +137,7 @@ pub(super) fn draw_timeline(input: TimelineInput<'_, '_>) {
             style: ruler::RulerStyle {
                 height: RULER_HEIGHT,
                 frame_tick_min_width: FRAME_TICK_MIN_WIDTH,
-                grid_color: crate::scheme::sidebar_shade(),
+                grid_color: crate::theme::sidebar_shade(),
                 label_color: Color::LIGHT5,
             },
         },

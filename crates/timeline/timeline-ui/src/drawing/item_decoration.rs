@@ -150,7 +150,7 @@ pub(in crate::drawing) fn draw_track_divider(
     painter.rect_filled(
         rect(x, y + TRACK_HEIGHT - 1.0, width, 1.0),
         0,
-        crate::scheme::sidebar_shade(),
+        crate::theme::sidebar_shade(),
     );
 }
 
@@ -378,7 +378,7 @@ pub(in crate::drawing) fn draw_item_border(
     let border_color = if selected {
         selected_border_color
     } else {
-        crate::scheme::sidebar_border()
+        crate::theme::sidebar_border()
     };
 
     let border = f64::from(ITEM_BORDER_STROKE_WIDTH)

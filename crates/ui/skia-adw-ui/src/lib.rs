@@ -10,9 +10,9 @@ pub mod button;
 pub mod font_grid;
 pub mod icon;
 pub mod math;
-pub mod scheme;
 pub mod slider;
 pub mod spinner;
+pub mod theme;
 
 pub const OVERSHOOT_MAX_DISTANCE: f64 = 100.0;
 pub const OVERSHOOT_FRICTION: f64 = 20.0;
