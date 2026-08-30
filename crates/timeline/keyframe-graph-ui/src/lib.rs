@@ -20,6 +20,7 @@ const PLAYHEAD_HANDLE_TOP: f64 = 0.0;
 const PLAYHEAD_HANDLE_TRIANGLE_HEIGHT: f64 = 5.0;
 const FRAME_TICK_MIN_WIDTH: f64 = 8.0;
 const GRAPH_GRID_TARGET_PX: f64 = 80.0;
+const RULER_TICK_ALPHA: f32 = 0.42;
 const SPEED_FILL_ALPHA: f32 = 0.18;
 const VIRTUAL_PLAYHEAD_DASH: f64 = 4.0;
 const VIRTUAL_PLAYHEAD_GAP: f64 = 4.0;
@@ -129,7 +130,11 @@ pub fn draw_keyframes(draw: KeyframeGraphDraw<'_>) {
     } = draw;
     let keyframe_playhead = virtual_playhead.unwrap_or(playhead);
 
-    painter.rect_filled(rect(0.0, 0.0, width, height), 0, Color::VIEW_BG_DARK);
+    painter.rect_filled(
+        rect(0.0, 0.0, width, height),
+        0,
+        shrimply_skia_adw_ui::theme::current().view_bg,
+    );
 
     {
         let graph_painter = painter.with_clip_rect(rect(
@@ -238,7 +243,7 @@ pub fn draw_keyframes(draw: KeyframeGraphDraw<'_>) {
     painter.rect_stroke(
         rect(0.5, 0.5, width - 1.0, content_height - 1.0),
         0,
-        Stroke::new(1.0, Color::SIDEBAR_BORDER_DARK),
+        Stroke::new(1.0, shrimply_skia_adw_ui::theme::current().sidebar_border),
         StrokeKind::Inside,
     );
     draw_cursor_lane(painter, width, domain, frame_step, accent_color);
@@ -327,6 +332,9 @@ fn draw_bool_keys(frame: GraphFrame<'_>, points: &[KeyframePoint]) {
         selected_keys: frame.selected_keys,
         focused_key: frame.focused_key,
         accent_color: frame.accent_color,
+        border_color: shrimply_skia_adw_ui::theme::current().sidebar_border,
+        foreground_color: shrimply_skia_adw_ui::theme::current().view_fg,
+        shade_color: shrimply_skia_adw_ui::theme::current().sidebar_shade,
     });
 }
 fn draw_graph_overscroll(
@@ -350,7 +358,7 @@ fn draw_graph_overscroll(
         ),
         edge,
         distance,
-        Color::<f32>::WHITE,
+        shrimply_skia_adw_ui::theme::current().view_fg,
     );
 }
 
@@ -364,9 +372,11 @@ fn draw_cursor_lane(
     painter.rect_filled(
         rect(0.0, 0.0, width, CURSOR_LANE_HEIGHT),
         0,
-        Color::SIDEBAR_SHADE_DARK,
+        shrimply_skia_adw_ui::theme::current().sidebar_bg,
     );
-    let tick_color = Color::LIGHT5.alpha_multiply(0.42);
+    let tick_color = shrimply_skia_adw_ui::theme::current()
+        .view_fg
+        .alpha_multiply(RULER_TICK_ALPHA);
     for tick in graph_time_ticks(width, domain, frame_step) {
         let x = time_x(tick.time, width, domain);
         if x < GRAPH_PAD || x > width - GRAPH_PAD {
@@ -393,7 +403,7 @@ fn draw_grid(
     domain: GraphDomain,
     frame_step: Time,
 ) {
-    let stroke = Stroke::new(1.0, Color::SIDEBAR_SHADE_DARK);
+    let stroke = Stroke::new(1.0, shrimply_skia_adw_ui::theme::current().sidebar_shade);
     let graph_top = CURSOR_LANE_HEIGHT;
     let graph_bottom = (height - GRAPH_PAD).max(graph_top);
     for step in 1..4 {
@@ -666,7 +676,7 @@ fn draw_speed_baseline(painter: &TimelinePainter, width: f64, height: f64, range
             vec2(GRAPH_PAD as f32, y as f32),
             vec2((width - GRAPH_PAD) as f32, y as f32),
         ],
-        Stroke::new(1.0, Color::SIDEBAR_BORDER_DARK),
+        Stroke::new(1.0, shrimply_skia_adw_ui::theme::current().sidebar_border),
     );
 }
 

@@ -311,15 +311,12 @@ fn draw_rulers(
     content_rect: Rect,
     surface_rect: Rect,
 ) {
-    let background = Color::from_rgba8(32, 34, 36, 245);
-    let foreground = Color::from_rgba8(205, 209, 212, 220);
+    let background = shrimply_skia_adw_ui::theme::current().sidebar_bg;
+    let foreground = shrimply_skia_adw_ui::theme::current().sidebar_fg;
     painter.rect_filled(
         Rect::from_min_size(
-            vec2(surface_rect.left() + RULER_SIZE_PX, surface_rect.top()),
-            vec2(
-                (surface_rect.width() - RULER_SIZE_PX).max(0.0),
-                RULER_SIZE_PX,
-            ),
+            vec2(surface_rect.left(), surface_rect.top()),
+            vec2(surface_rect.width(), RULER_SIZE_PX),
         ),
         0,
         background,

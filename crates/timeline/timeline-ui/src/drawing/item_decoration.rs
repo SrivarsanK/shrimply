@@ -129,8 +129,9 @@ pub(in crate::drawing) fn draw_selected_track_fill(
     width: f64,
 ) {
     if selected_tracks.contains(address) {
-        let fill = Color::LIGHT1.alpha_multiply(TRACK_SELECTION_ROW_ALPHA);
-        let edge = Color::LIGHT1.alpha_multiply(TRACK_SELECTION_EDGE_ALPHA);
+        let foreground = crate::theme::current().view_fg;
+        let fill = foreground.alpha_multiply(TRACK_SELECTION_ROW_ALPHA);
+        let edge = foreground.alpha_multiply(TRACK_SELECTION_EDGE_ALPHA);
         let height = (TRACK_HEIGHT - 1.0).max(1.0);
         painter.rect_filled(rect(x, y, width, height), 0, fill);
         painter.rect_filled(rect(x, y, width, 1.0), 0, edge);
@@ -150,7 +151,7 @@ pub(in crate::drawing) fn draw_track_divider(
     painter.rect_filled(
         rect(x, y + TRACK_HEIGHT - 1.0, width, 1.0),
         0,
-        crate::theme::sidebar_shade(),
+        crate::theme::current().sidebar_shade,
     );
 }
 
@@ -378,7 +379,7 @@ pub(in crate::drawing) fn draw_item_border(
     let border_color = if selected {
         selected_border_color
     } else {
-        crate::theme::sidebar_border()
+        crate::theme::current().sidebar_border
     };
 
     let border = f64::from(ITEM_BORDER_STROKE_WIDTH)

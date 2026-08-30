@@ -21,6 +21,8 @@ const METER_VERTICAL_PADDING: f32 = 16.0;
 const RULER_WIDTH: f32 = 32.0;
 const CHANNEL_GAP: f32 = 1.0;
 const FONT_SIZE: f32 = 8.0;
+const RULER_LABEL_ALPHA: f32 = 0.55;
+const RULER_TICK_ALPHA: f32 = 0.35;
 
 #[derive(Clone, Copy)]
 struct ChannelLevel {
@@ -82,7 +84,7 @@ pub(super) fn new(levels: SharedAudioLevels) -> gtk::GLArea {
         let painter = match runtime.renderer.begin_frame(
             screen_size_px,
             pixels_per_point,
-            crate::theme::view_bg(),
+            crate::theme::current().view_bg,
         ) {
             Ok(painter) => painter,
             Err(error) => {
@@ -152,7 +154,7 @@ fn draw_meter(painter: &TimelinePainter, width: f32, height: f32, channels: [Cha
         vec2(PADDING_LEFT, top),
         vec2(bars_right - PADDING_LEFT, bottom - top),
     );
-    painter.rect_filled(meter, 1.0, Color::DARK5);
+    painter.rect_filled(meter, 1.0, crate::theme::current().sidebar_bg);
 
     let bar_left = meter.left();
     let bar_top = meter.top();
@@ -240,12 +242,15 @@ fn draw_ruler(painter: &TimelinePainter, bars_right: f32, width: f32, top: f32, 
     let tick_end = tick_start + 3.0;
     let label_gap = 4.0;
     let font = FontId::proportional(FONT_SIZE);
+    let foreground = crate::theme::current().view_fg;
+    let tick_color = foreground.alpha_multiply(RULER_TICK_ALPHA);
+    let label_color = foreground.alpha_multiply(RULER_LABEL_ALPHA);
 
     for db in (0..=60).step_by(step) {
         let y = db_y(-(db as f32), top, bottom);
         painter.line_segment(
             [vec2(tick_start, y), vec2(tick_end, y)],
-            Stroke::new(1.0, Color::DARK1),
+            Stroke::new(1.0, tick_color),
         );
         let label = if db == 0 {
             String::from("0")
@@ -253,7 +258,7 @@ fn draw_ruler(painter: &TimelinePainter, bars_right: f32, width: f32, top: f32, 
             format!("-{db}")
         };
         let size = painter
-            .layout_no_wrap(&label, font.clone(), Color::LIGHT4)
+            .layout_no_wrap(&label, font.clone(), label_color)
             .size();
         if tick_end + label_gap + size.x <= width - PADDING_RIGHT {
             painter.text(
@@ -261,7 +266,7 @@ fn draw_ruler(painter: &TimelinePainter, bars_right: f32, width: f32, top: f32, 
                 Align2::LEFT_TOP,
                 label,
                 font.clone(),
-                Color::LIGHT4,
+                label_color,
             );
         }
     }

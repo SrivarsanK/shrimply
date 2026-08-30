@@ -32,6 +32,22 @@ pub struct PreparedProject {
 }
 
 pub fn prepare_project(path: &Path) -> Result<PreparedProject, ProjectLoadError> {
+    match prepare_project_with_frame_grid_repair(path)? {
+        ProjectPreparation::Ready(project) => Ok(project),
+        ProjectPreparation::FrameGridRepair(_) => Err(ProjectLoadError::Other(
+            "project is not aligned to the project frame grid".to_string(),
+        )),
+    }
+}
+
+pub enum ProjectPreparation {
+    Ready(PreparedProject),
+    FrameGridRepair(Project),
+}
+
+pub fn prepare_project_with_frame_grid_repair(
+    path: &Path,
+) -> Result<ProjectPreparation, ProjectLoadError> {
     if !is_project_path(path) {
         return Err(ProjectLoadError::Other(format!(
             "{} is not a supported project file",
@@ -41,31 +57,37 @@ pub fn prepare_project(path: &Path) -> Result<PreparedProject, ProjectLoadError>
     acquire_project_lock(path).map_err(project_lock_error)?;
     let started = Instant::now();
     tracing::info!(path = %path.display(), "Loading project");
-    let project = if has_extension(path, "json") {
-        from_json_file(path)
+    let outcome = if has_extension(path, "json") {
+        from_json_file_with_frame_grid_repair(path)
     } else {
-        storage::read_project(path).and_then(|mut project| {
-            project.validate()?;
-            project.migrate_gaussian_items();
-            project.resolve_media_paths(path.parent().unwrap_or_else(|| Path::new(".")));
-            project.ensure_ids();
-            project.normalize_media_relative_transforms();
-            Ok(project)
+        storage::read_project(path).and_then(|project| {
+            let outcome = validate_with_frame_grid_repair(project)?;
+            Ok(prepare_validation_outcome(
+                outcome,
+                path.parent().unwrap_or_else(|| Path::new(".")),
+            ))
         })
     }
     .map_err(|error| {
         release_project_lock(path);
         ProjectLoadError::Other(error)
     })?;
+    let project = match outcome {
+        ProjectValidationOutcome::Valid(project) => project,
+        ProjectValidationOutcome::FrameGridRepair(project) => {
+            release_project_lock(path);
+            return Ok(ProjectPreparation::FrameGridRepair(project));
+        }
+    };
     tracing::info!(
         path = %path.display(),
         elapsed_ms = started.elapsed().as_millis(),
         "Prepared project"
     );
-    Ok(PreparedProject {
+    Ok(ProjectPreparation::Ready(PreparedProject {
         project,
         path: path.to_path_buf(),
-    })
+    }))
 }
 
 pub fn activate_project(prepared: PreparedProject) -> Project {

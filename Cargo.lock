@@ -5776,6 +5776,7 @@ dependencies = [
  "shrimply-preview-core",
  "shrimply-project",
  "shrimply-render-core",
+ "shrimply-skia-adw-ui",
  "shrimply-state",
  "shrimply-timeline",
  "shrimply-ui-foundation",

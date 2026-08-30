@@ -134,12 +134,10 @@ impl VideoRenderer {
             self.gl.bind_vertex_array(None);
             self.gl.use_program(None);
         }
-        let painter = self
-            .overlay_renderer
-            .begin_overlay_frame(
-                glam::UVec2::new(width as u32, height as u32),
-                pixels_per_point,
-            )?;
+        let painter = self.overlay_renderer.begin_overlay_frame(
+            glam::UVec2::new(width as u32, height as u32),
+            pixels_per_point,
+        )?;
         draw_overlay(&painter);
         self.overlay_renderer.end_frame()
     }

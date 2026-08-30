@@ -114,6 +114,7 @@ const TRACK_SELECTION_EDGE_ALPHA: f32 = 0.44;
 const TIMELINE_PADDING_LEFT: f64 = 2.0;
 const TIMELINE_PADDING_RIGHT: f64 = 2.0;
 const RULER_HEIGHT: f64 = 44.0;
+const RULER_LABEL_ALPHA: f32 = 0.55;
 const TRACK_HEIGHT: f64 = 36.0;
 const PLAYHEAD_HANDLE_WIDTH: f64 = 16.0;
 const PLAYHEAD_HANDLE_HEIGHT: f64 = 8.0;
@@ -138,6 +139,7 @@ const BEAT_POLL_INTERVAL: Duration = Duration::from_millis(33);
 const RECORDING_DURATION_HEADROOM_SECONDS: i64 = 10;
 const VIDEO_RECORDING_POLL_INTERVAL: Duration = Duration::from_millis(33);
 const PERFORMANCE_MARKER_HEIGHT: f64 = 3.0;
+const PERFORMANCE_VISUAL_ALPHA: f32 = 0.42;
 const SIDEBAR_WIDTH: i32 = 44;
 const SIDEBAR_ICON_SIZE: i32 = 28;
 
@@ -365,7 +367,7 @@ pub fn new(
         let painter = match runtime.renderer.begin_frame(
             screen_size_px,
             pixels_per_point,
-            crate::theme::view_bg(),
+            crate::theme::current().view_bg,
         ) {
             Ok(painter) => painter,
             Err(error) => {
@@ -489,6 +491,10 @@ pub fn new(
 
         glib::Propagation::Stop
     });
+
+    let style = adw::StyleManager::for_display(&area.display());
+    let theme_area = area.clone();
+    style.connect_dark_notify(move |_| theme_area.queue_render());
 
     let destroy_runtime = runtime.clone();
     area.connect_unrealize(move |area| {

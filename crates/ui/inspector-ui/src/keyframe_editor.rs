@@ -361,14 +361,17 @@ pub(crate) fn build(
                 "keyframe graph begin_frame size={}x{} scale={}",
                 screen_size_px.x, screen_size_px.y, pixels_per_point
             ));
-            let painter =
-                match renderer.begin_frame(screen_size_px, pixels_per_point, Color::VIEW_BG_DARK) {
-                    Ok(painter) => painter,
-                    Err(error) => {
-                        tracing::error!("Could not initialize keyframe graph renderer: {error}");
-                        return glib::Propagation::Stop;
-                    }
-                };
+            let painter = match renderer.begin_frame(
+                screen_size_px,
+                pixels_per_point,
+                shrimply_skia_adw_ui::theme::current().view_bg,
+            ) {
+                Ok(painter) => painter,
+                Err(error) => {
+                    tracing::error!("Could not initialize keyframe graph renderer: {error}");
+                    return glib::Propagation::Stop;
+                }
+            };
             shrimply_support::crash::set_context("keyframe graph begin_frame end");
             if let Some((updated, visible_area)) = pending_graph.borrow_mut().take() {
                 *graph_data.borrow_mut() = updated;
@@ -463,6 +466,10 @@ pub(crate) fn build(
             shrimply_support::crash::set_context("keyframe graph unrealize end");
         });
     }
+
+    let style = adw::StyleManager::for_display(&graph.display());
+    let theme_graph = graph.clone();
+    style.connect_dark_notify(move |_| theme_graph.queue_render());
 
     let motion = gtk::EventControllerMotion::new();
     {

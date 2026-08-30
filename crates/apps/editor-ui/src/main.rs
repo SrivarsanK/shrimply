@@ -448,12 +448,12 @@ fn begin_project_load(app: &adw::Application, path: PathBuf) {
     window.set_content(Some(&project_loading_view(&path)));
     if has_otio_extension(&path) {
         window.present();
-        choose_otio_destination(app, &window, path);
+        choose_otio_settings(app, &window, path);
         return;
     }
     if has_kdenlive_extension(&path) {
         window.present();
-        choose_kdenlive_destination(app, &window, path);
+        confirm_kdenlive_conversion(app, &window, path);
         return;
     }
     let app = app.clone();
@@ -465,92 +465,72 @@ fn begin_project_load(app: &adw::Application, path: PathBuf) {
     window.present();
 }
 
-fn choose_kdenlive_destination(
+fn confirm_kdenlive_conversion(
     app: &adw::Application,
     window: &adw::ApplicationWindow,
     source: PathBuf,
 ) {
-    let label = "Import Kdenlive as Shrimply Project";
-    let filter = gtk::FileFilter::new();
-    filter.set_name_i18n("Shrimply projects");
-    filter.add_pattern("*.shrimp");
-    let filters = gio::ListStore::new::<gtk::FileFilter>();
-    filters.append(&filter);
-    let initial_name = source
-        .file_stem()
-        .map(|name| format!("{}.shrimp", name.to_string_lossy()))
-        .unwrap_or_else(|| "imported.shrimp".to_string());
-    let dialog = gtk::FileDialog::builder()
-        .title(tr!(label).as_ref())
-        .initial_name(initial_name)
-        .filters(&filters)
-        .default_filter(&filter)
+    let message = gtk::Label::new(Some(
+        tr!("Shrimply supports only some Kdenlive features. Unsupported content may be changed or omitted.")
+            .as_ref(),
+    ));
+    message.set_justify(gtk::Justification::Center);
+    message.set_wrap(true);
+    let details = gtk::LinkButton::builder()
+        .label(tr!("Learn more").as_ref())
+        .uri(KDENLIVE_IMPORT_DOCS)
+        .halign(gtk::Align::Center)
         .build();
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    content.append(&message);
+    content.append(&details);
+    let dialog = adw::AlertDialog::builder()
+        .heading(tr!("Convert Kdenlive Project?").as_ref())
+        .extra_child(&content)
+        .build();
+    dialog.add_responses_i18n(&[("abort", "Abort"), ("convert", "Convert")]);
+    dialog.set_default_response(Some("convert"));
+    dialog.set_close_response("abort");
     let app = app.clone();
     let window = window.clone();
     let parent = window.clone();
-    shrimply_ui_foundation::file_picker::save(
-        label,
-        &dialog,
-        Some(parent.upcast_ref::<gtk::Window>()),
-        move |result| {
-            let Ok(file) = result else {
+    dialog.choose(
+        Some(parent.upcast_ref::<gtk::Widget>()),
+        None::<&gio::Cancellable>,
+        move |answer| {
+            if answer != "convert" {
                 app.quit();
                 return;
-            };
-            let Some(mut destination) = file.path() else {
-                show_project_load_error(
-                    &app,
-                    &window,
-                    "Could not import Kdenlive project",
-                    "The selected location does not have a local path.",
-                );
-                return;
-            };
-            if destination
-                .extension()
-                .and_then(|extension| extension.to_str())
-                .is_none_or(|extension| !extension.eq_ignore_ascii_case("shrimp"))
-            {
-                destination.set_extension("shrimp");
             }
-            start_kdenlive_import(&app, &window, source.clone(), destination);
+            start_kdenlive_import(&app, &window, source);
         },
     );
 }
 
 enum KdenliveImportMessage {
     Progress(&'static str),
-    Finished(Result<(PathBuf, Vec<String>), String>),
+    Finished(Result<(project::ProjectValidationOutcome, Vec<String>), String>),
 }
 
-fn start_kdenlive_import(
-    app: &adw::Application,
-    window: &adw::ApplicationWindow,
-    source: PathBuf,
-    destination: PathBuf,
-) {
+fn start_kdenlive_import(app: &adw::Application, window: &adw::ApplicationWindow, source: PathBuf) {
     let (sender, receiver) = async_channel::bounded(1);
     window.set_content(Some(&project_loading_view_with_subtitle(
         "Reading and converting Kdenlive timeline…",
     )));
+    let worker_source = source.clone();
     thread::spawn(move || {
         let _ = sender.send_blocking(KdenliveImportMessage::Progress(
             "Reading and converting Kdenlive timeline…",
         ));
         let result: Result<_, String> = (|| {
             let import =
-                shrimply_kdenlive::from_file(&source).map_err(|error| error.to_string())?;
+                shrimply_kdenlive::from_file(&worker_source).map_err(|error| error.to_string())?;
             let _ = sender.send_blocking(KdenliveImportMessage::Progress(
                 "Validating imported project…",
             ));
-            let native =
-                project::from_json_value(import.project).map_err(|error| error.to_string())?;
-            let _ =
-                sender.send_blocking(KdenliveImportMessage::Progress("Writing Shrimply project…"));
-            project::create_project_file(&destination, &native)
+            let native = project::from_json_value_with_frame_grid_repair(import.project)
                 .map_err(|error| error.to_string())?;
-            Ok((destination, import.warnings))
+            Ok((native, import.warnings))
         })();
         let _ = sender.send_blocking(KdenliveImportMessage::Finished(result));
     });
@@ -564,11 +544,11 @@ fn start_kdenlive_import(
                 }
                 KdenliveImportMessage::Finished(result) => {
                     match result {
-                        Ok((path, warnings)) => {
-                            for warning in warnings {
+                        Ok((project, warnings)) => {
+                            for warning in &warnings {
                                 tracing::warn!(limitation = %warning, "Kdenlive import limitation");
                             }
-                            show_kdenlive_limitations(&app, &window, path)
+                            finish_kdenlive_import(&app, &window, source, project)
                         }
                         Err(error) => show_project_load_error(
                             &app,
@@ -590,102 +570,36 @@ fn start_kdenlive_import(
     });
 }
 
-fn show_kdenlive_limitations(
-    app: &adw::Application,
-    window: &adw::ApplicationWindow,
-    path: PathBuf,
-) {
-    let message = gtk::Label::new(Some(
-        tr!("Shrimply supports only some Kdenlive features. Unsupported content may be changed or omitted.")
-            .as_ref(),
-    ));
-    message.set_justify(gtk::Justification::Center);
-    message.set_wrap(true);
-    let details = gtk::LinkButton::builder()
-        .label(tr!("Learn more").as_ref())
-        .uri(KDENLIVE_IMPORT_DOCS)
-        .halign(gtk::Align::Center)
-        .build();
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    content.append(&message);
-    content.append(&details);
-    let dialog = adw::AlertDialog::builder()
-        .heading(tr!("Compatibility Notice").as_ref())
-        .extra_child(&content)
-        .build();
-    dialog.add_responses_i18n(&[("open", "Open Project")]);
-    dialog.set_default_response(Some("open"));
-    dialog.set_close_response("open");
-    let app = app.clone();
-    let window = window.clone();
-    let parent = window.clone();
-    dialog.choose(
-        Some(parent.upcast_ref::<gtk::Widget>()),
-        None::<&gio::Cancellable>,
-        move |_| load_project(&app, &window, path),
-    );
-}
-
-fn choose_otio_destination(
+fn finish_kdenlive_import(
     app: &adw::Application,
     window: &adw::ApplicationWindow,
     source: PathBuf,
+    outcome: project::ProjectValidationOutcome,
 ) {
-    let label = "Import OTIO as Shrimply Project";
-    let filter = gtk::FileFilter::new();
-    filter.set_name_i18n("Shrimply projects");
-    filter.add_pattern("*.shrimp");
-    let filters = gio::ListStore::new::<gtk::FileFilter>();
-    filters.append(&filter);
-    let initial_name = source
-        .file_stem()
-        .map(|name| format!("{}.shrimp", name.to_string_lossy()))
-        .unwrap_or_else(|| "imported.shrimp".to_string());
-    let dialog = gtk::FileDialog::builder()
-        .title(tr!(label).as_ref())
-        .initial_name(initial_name)
-        .filters(&filters)
-        .default_filter(&filter)
-        .build();
-    let app = app.clone();
-    let window = window.clone();
-    let parent = window.clone();
-    shrimply_ui_foundation::file_picker::save(
-        label,
-        &dialog,
-        Some(parent.upcast_ref::<gtk::Window>()),
-        move |result| {
-            let Ok(file) = result else {
-                app.quit();
-                return;
-            };
-            let Some(mut destination) = file.path() else {
-                show_project_load_error(
-                    &app,
-                    &window,
-                    "Could not import OTIO",
-                    "The selected location does not have a local path.",
-                );
-                return;
-            };
-            if destination
-                .extension()
-                .and_then(|extension| extension.to_str())
-                .is_none_or(|extension| !extension.eq_ignore_ascii_case("shrimp"))
-            {
-                destination.set_extension("shrimp");
-            }
-            choose_otio_settings(&app, &window, source.clone(), destination);
-        },
-    );
+    match outcome {
+        project::ProjectValidationOutcome::Valid(project) => choose_project_destination(
+            app,
+            window,
+            imported_project_filename(&source),
+            "Import Kdenlive as Shrimply Project",
+            "Could not import Kdenlive project",
+            project,
+            |app, window, path| load_project(app, window, path),
+        ),
+        project::ProjectValidationOutcome::FrameGridRepair(project) => {
+            show_frame_grid_repair_dialog(
+                app,
+                window,
+                source,
+                project,
+                "Could not import Kdenlive project",
+                |app, window, path| load_project(app, window, path),
+            )
+        }
+    }
 }
 
-fn choose_otio_settings(
-    app: &adw::Application,
-    window: &adw::ApplicationWindow,
-    source: PathBuf,
-    destination: PathBuf,
-) {
+fn choose_otio_settings(app: &adw::Application, window: &adw::ApplicationWindow, source: PathBuf) {
     let selector = ProjectSettingsSelector::new();
     let content = adw::PreferencesGroup::builder()
         .title(tr!("Project Settings").as_ref())
@@ -722,7 +636,7 @@ fn choose_otio_settings(
                 );
                 return;
             };
-            start_otio_import(&app, &window, source, destination, canvas_size, fps);
+            start_otio_import(&app, &window, source, canvas_size, fps);
         },
     );
 }
@@ -731,17 +645,17 @@ fn start_otio_import(
     app: &adw::Application,
     window: &adw::ApplicationWindow,
     source: PathBuf,
-    destination: PathBuf,
     canvas_size: project::CanvasSize,
     fps: Fraction,
 ) {
     let (sender, receiver) = async_channel::bounded(1);
+    let worker_source = source.clone();
     thread::spawn(move || {
-        let result = shrimply_otio::from_file(&source, canvas_size, fps).and_then(|import| {
-            let native = project::from_json_value(import.project)?;
-            project::create_project_file(&destination, &native)?;
-            Ok((destination, import.warnings))
-        });
+        let result =
+            shrimply_otio::from_file(&worker_source, canvas_size, fps).and_then(|import| {
+                let native = project::from_json_value_with_frame_grid_repair(import.project)?;
+                Ok((native, import.warnings))
+            });
         let _ = sender.send_blocking(result);
     });
     let app = app.clone();
@@ -757,11 +671,187 @@ fn start_otio_import(
             return;
         };
         match result {
-            Ok((path, warnings)) if warnings.is_empty() => load_project(&app, &window, path),
-            Ok((path, warnings)) => show_otio_warnings(&app, &window, path, warnings),
+            Ok((project, warnings)) => finish_otio_import(&app, &window, source, project, warnings),
             Err(error) => show_project_load_error(&app, &window, "Could not import OTIO", &error),
         }
     });
+}
+
+fn finish_otio_import(
+    app: &adw::Application,
+    window: &adw::ApplicationWindow,
+    source: PathBuf,
+    outcome: project::ProjectValidationOutcome,
+    warnings: Vec<String>,
+) {
+    let saved = move |app: &adw::Application, window: &adw::ApplicationWindow, path: PathBuf| {
+        if warnings.is_empty() {
+            load_project(app, window, path);
+        } else {
+            show_otio_warnings(app, window, path, warnings);
+        }
+    };
+    match outcome {
+        project::ProjectValidationOutcome::Valid(project) => choose_project_destination(
+            app,
+            window,
+            imported_project_filename(&source),
+            "Import OTIO as Shrimply Project",
+            "Could not import OTIO",
+            project,
+            saved,
+        ),
+        project::ProjectValidationOutcome::FrameGridRepair(project) => {
+            show_frame_grid_repair_dialog(
+                app,
+                window,
+                source,
+                project,
+                "Could not import OTIO",
+                saved,
+            )
+        }
+    }
+}
+
+fn show_frame_grid_repair_dialog(
+    app: &adw::Application,
+    window: &adw::ApplicationWindow,
+    source: PathBuf,
+    project: project::Project,
+    error_heading: &'static str,
+    saved: impl FnOnce(&adw::Application, &adw::ApplicationWindow, PathBuf) + 'static,
+) {
+    let dialog = adw::AlertDialog::builder()
+        .heading(tr!("Project Timing Needs Repair").as_ref())
+        .body(
+            tr!("Some clips are not aligned to the project frame grid. Fixing them will snap and minimally shift clip boundaries, then save a new project without changing the original.")
+                .as_ref(),
+        )
+        .build();
+    dialog.add_responses_i18n(&[("abort", "Abort"), ("fix", "Fix")]);
+    dialog.set_default_response(Some("fix"));
+    dialog.set_close_response("abort");
+    let app = app.clone();
+    let window = window.clone();
+    let parent = window.clone();
+    dialog.choose(
+        Some(parent.upcast_ref::<gtk::Widget>()),
+        None::<&gio::Cancellable>,
+        move |answer| {
+            if answer != "fix" {
+                app.quit();
+                return;
+            }
+            choose_project_destination(
+                &app,
+                &window,
+                fixed_project_filename(&source),
+                "Save Fixed Project",
+                error_heading,
+                project,
+                saved,
+            );
+        },
+    );
+}
+
+fn choose_project_destination(
+    app: &adw::Application,
+    window: &adw::ApplicationWindow,
+    initial_name: String,
+    label: &'static str,
+    error_heading: &'static str,
+    project: project::Project,
+    saved: impl FnOnce(&adw::Application, &adw::ApplicationWindow, PathBuf) + 'static,
+) {
+    let filter = gtk::FileFilter::new();
+    filter.set_name_i18n("Shrimply projects");
+    filter.add_pattern("*.shrimp");
+    let filters = gio::ListStore::new::<gtk::FileFilter>();
+    filters.append(&filter);
+    let dialog = gtk::FileDialog::builder()
+        .title(tr!(label).as_ref())
+        .initial_name(initial_name)
+        .filters(&filters)
+        .default_filter(&filter)
+        .build();
+    let app = app.clone();
+    let window = window.clone();
+    let parent = window.clone();
+    shrimply_ui_foundation::file_picker::save(
+        label,
+        &dialog,
+        Some(parent.upcast_ref::<gtk::Window>()),
+        move |result| {
+            let Ok(file) = result else {
+                app.quit();
+                return;
+            };
+            let Some(mut destination) = file.path() else {
+                show_project_load_error(
+                    &app,
+                    &window,
+                    error_heading,
+                    "The selected location does not have a local path.",
+                );
+                return;
+            };
+            if destination
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_none_or(|extension| !extension.eq_ignore_ascii_case("shrimp"))
+            {
+                destination.set_extension("shrimp");
+            }
+            window.set_content(Some(&project_loading_view_with_subtitle(
+                "Writing Shrimply project…",
+            )));
+            let (sender, receiver) = async_channel::bounded(1);
+            thread::spawn({
+                let destination = destination.clone();
+                move || {
+                    let result =
+                        project::create_project_file(&destination, &project).map(|()| destination);
+                    let _ = sender.send_blocking(result);
+                }
+            });
+            glib::spawn_future_local(async move {
+                let Ok(result) = receiver.recv().await else {
+                    show_project_load_error(
+                        &app,
+                        &window,
+                        error_heading,
+                        "The project writer stopped unexpectedly.",
+                    );
+                    return;
+                };
+                match result {
+                    Ok(path) => saved(&app, &window, path),
+                    Err(error) => show_project_load_error(&app, &window, error_heading, &error),
+                }
+            });
+        },
+    );
+}
+
+fn imported_project_filename(source: &Path) -> String {
+    source
+        .file_stem()
+        .map(|name| format!("{}.shrimp", name.to_string_lossy()))
+        .unwrap_or_else(|| "imported.shrimp".to_string())
+}
+
+fn fixed_project_filename(source: &Path) -> String {
+    let stem = source
+        .file_stem()
+        .map(|name| name.to_string_lossy())
+        .unwrap_or_else(|| "project".into());
+    let timestamp = glib::DateTime::now_local()
+        .and_then(|time| time.format("%Y-%m-%d_%H-%M-%S"))
+        .map(|value| value.to_string())
+        .unwrap_or_else(|_| "unknown-time".to_string());
+    format!("{stem}_{timestamp}-fix.shrimp")
 }
 
 fn show_otio_warnings(
@@ -873,7 +963,9 @@ fn start_project_load(app: &adw::Application, window: &adw::ApplicationWindow, p
     let (sender, receiver) = async_channel::bounded(1);
     let worker_path = path.clone();
     thread::spawn(move || {
-        let _ = sender.send_blocking(project::prepare_project(&worker_path));
+        let _ = sender.send_blocking(project::prepare_project_with_frame_grid_repair(
+            &worker_path,
+        ));
     });
     let app = app.clone();
     let window = window.clone();
@@ -888,7 +980,7 @@ fn start_project_load(app: &adw::Application, window: &adw::ApplicationWindow, p
             return;
         };
         match result {
-            Ok(prepared) => {
+            Ok(project::ProjectPreparation::Ready(prepared)) => {
                 let project = project::activate_project(prepared);
                 if let Err(error) = shrimply_support::recent_projects::touch(&path, &project.name) {
                     tracing::warn!("Could not update recent projects: {error}");
@@ -896,6 +988,16 @@ fn start_project_load(app: &adw::Application, window: &adw::ApplicationWindow, p
                 ffmpeg::init().expect("FFmpeg should initialize");
                 ffmpeg::util::log::set_level(ffmpeg::util::log::Level::Error);
                 build_ui(&window, project);
+            }
+            Ok(project::ProjectPreparation::FrameGridRepair(project)) => {
+                show_frame_grid_repair_dialog(
+                    &app,
+                    &window,
+                    path,
+                    project,
+                    "Could not fix project",
+                    |app, window, path| load_project(app, window, path),
+                );
             }
             Err(project::ProjectLoadError::LockedByOtherInstance { pid }) => {
                 show_project_lock_dialog(&app, &window, path, pid);

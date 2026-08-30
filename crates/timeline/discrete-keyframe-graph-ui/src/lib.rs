@@ -9,6 +9,8 @@ const SELECTED_KEY_RADIUS: f32 = 5.0;
 const FRAME_CELL_MIN_WIDTH: f64 = 6.0;
 const FRAME_LABEL_MIN_WIDTH: f64 = 64.0;
 const GRAPH_PAD: f64 = 12.0;
+const FRAME_LABEL_ALPHA: f32 = 0.7;
+const FRAME_SHADE_ALPHA: f32 = 0.22;
 
 #[derive(Clone, Default)]
 pub struct Graph {
@@ -39,6 +41,9 @@ pub struct Draw<'a> {
     pub selected_keys: &'a [Time],
     pub focused_key: Option<Time>,
     pub accent_color: Color,
+    pub border_color: Color,
+    pub foreground_color: Color,
+    pub shade_color: Color,
 }
 
 pub fn draw(draw: Draw<'_>) {
@@ -93,7 +98,7 @@ fn draw_frame_cells(draw: &Draw<'_>) {
     let label_stride = (minimum_label_stride + 4).div_euclid(5) * 5;
     let top = draw.ruler_height;
     let height = (draw.content_height - top).max(0.0);
-    let border = Stroke::new(1.0, Color::SIDEBAR_BORDER_DARK);
+    let border = Stroke::new(1.0, draw.border_color);
     let mut frame = first_frame;
     while frame <= last_frame {
         let start = Time {
@@ -113,8 +118,11 @@ fn draw_frame_cells(draw: &Draw<'_>) {
             vec2((right - left) as f32, height as f32),
         );
         if frame.rem_euclid(label_stride) == 0 {
-            draw.painter
-                .rect_filled(bounds, 0, Color::SIDEBAR_SHADE_DARK.alpha_multiply(0.22));
+            draw.painter.rect_filled(
+                bounds,
+                0,
+                draw.shade_color.alpha_multiply(FRAME_SHADE_ALPHA),
+            );
         }
         draw.painter
             .rect_stroke(bounds, 0, border, StrokeKind::Inside);
@@ -128,7 +136,7 @@ fn draw_frame_cells(draw: &Draw<'_>) {
                 vec2((left + 2.0) as f32, (draw.ruler_height - 5.0) as f32),
                 label,
                 FontId::proportional(9.0),
-                Color::WINDOW_FG_DARK.alpha_multiply(0.7),
+                draw.foreground_color.alpha_multiply(FRAME_LABEL_ALPHA),
             );
         }
         frame += stride;

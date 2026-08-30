@@ -139,7 +139,7 @@ impl Color<f32> {
     pub const HEADERBAR_SHADE_LIGHT: Self = Self::from_rgb8_alpha(0x00, 0x00, 0x06, 0.12);
     pub const HEADERBAR_SHADE_DARK: Self = Self::from_rgb8_alpha(0x00, 0x00, 0x06, 0.36);
     pub const HEADERBAR_DARKER_SHADE_LIGHT: Self = Self::from_rgb8_alpha(0x00, 0x00, 0x06, 0.12);
-    pub const HEADERBAR_DARKER_SHADE_DARK: Self = Self::from_rgb8_alpha(0x00, 0x00, 0x06, 0.90);
+    pub const HEADERBAR_DARKER_SHADE_DARK: Self = Self::from_rgb8_alpha(0x00, 0x00, 0x0c, 0.90);
 
     pub const SIDEBAR_BG_LIGHT: Self = Self::from_rgb8(0xeb, 0xeb, 0xed);
     pub const SIDEBAR_BG_DARK: Self = Self::from_rgb8(0x2e, 0x2e, 0x32);
@@ -200,5 +200,5 @@ impl Color<f32> {
     pub const SHADE_LIGHT: Self = Self::from_rgb8_alpha(0x00, 0x00, 0x06, 0.07);
     pub const SHADE_DARK: Self = Self::from_rgb8_alpha(0x00, 0x00, 0x06, 0.25);
     pub const SCROLLBAR_OUTLINE_LIGHT: Self = Self::from_rgb8(0xff, 0xff, 0xff);
-    pub const SCROLLBAR_OUTLINE_DARK: Self = Self::from_rgb8_alpha(0x00, 0x00, 0x06, 0.50);
+    pub const SCROLLBAR_OUTLINE_DARK: Self = Self::from_rgb8_alpha(0x00, 0x00, 0x0c, 0.95);
 }

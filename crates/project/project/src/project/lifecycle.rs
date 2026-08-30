@@ -1,44 +1,163 @@
 use super::*;
 
+pub enum ProjectValidationOutcome {
+    Valid(Project),
+    FrameGridRepair(Project),
+}
+
 pub fn from_json_file(path: impl AsRef<Path>) -> Result<Project, String> {
+    match from_json_file_with_frame_grid_repair(path)? {
+        ProjectValidationOutcome::Valid(project) => Ok(project),
+        ProjectValidationOutcome::FrameGridRepair(_) => {
+            Err("project is not aligned to the project frame grid".to_string())
+        }
+    }
+}
+
+pub fn from_json_file_with_frame_grid_repair(
+    path: impl AsRef<Path>,
+) -> Result<ProjectValidationOutcome, String> {
     let path = path.as_ref();
     let contents = fs::read_to_string(path)
         .map_err(|error| format!("could not read {}: {error}", path.display()))?;
-    let mut project = conversion::from_json(&contents)
+    let project = conversion::from_json(&contents)
         .map_err(|error| format!("could not load {}: {error}", path.display()))?;
-    project
-        .validate()
+    let outcome = validate_with_frame_grid_repair(project)
         .map_err(|error| format!("could not load {}: {error}", path.display()))?;
-    project.migrate_gaussian_items();
-    set_active_project_path(path);
-    project.resolve_media_paths(&project_directory());
-    project.ensure_ids();
-    project.normalize_media_relative_transforms();
-    tracing::info!(
-        "Loaded project {} with {} video track(s), {} audio track(s), {} caption track(s)",
-        path.display(),
-        project.video_tracks.len(),
-        project.audio_tracks.len(),
-        project.caption_tracks.len()
-    );
-    Ok(project)
+    Ok(prepare_validation_outcome(
+        outcome,
+        path.parent().unwrap_or_else(|| Path::new(".")),
+    ))
 }
 
 pub fn from_json_value(value: serde_json::Value) -> Result<Project, String> {
-    let mut project: Project = serde_json::from_value(value)
+    match from_json_value_with_frame_grid_repair(value)? {
+        ProjectValidationOutcome::Valid(project) => Ok(project),
+        ProjectValidationOutcome::FrameGridRepair(_) => {
+            Err("imported project is not aligned to the project frame grid".to_string())
+        }
+    }
+}
+
+pub fn from_json_value_with_frame_grid_repair(
+    value: serde_json::Value,
+) -> Result<ProjectValidationOutcome, String> {
+    let project: Project = serde_json::from_value(value)
         .map_err(|error| format!("could not decode imported project: {error}"))?;
-    project
-        .validate()
+    let outcome = validate_with_frame_grid_repair(project)
         .map_err(|error| format!("could not validate imported project: {error}"))?;
+    Ok(prepare_imported_outcome(outcome))
+}
+
+pub(super) fn validate_with_frame_grid_repair(
+    project: Project,
+) -> Result<ProjectValidationOutcome, String> {
+    project.validate_without_frame_alignment()?;
+    if validate_project_frame_alignment(&project).is_ok() {
+        return Ok(ProjectValidationOutcome::Valid(project));
+    }
+    let mut repaired = project;
+    if !repaired.repair_frame_grid() {
+        return Err("project is not aligned to the project frame grid".to_string());
+    }
+    repaired.validate()?;
+    Ok(ProjectValidationOutcome::FrameGridRepair(repaired))
+}
+
+pub(super) fn prepare_validation_outcome(
+    outcome: ProjectValidationOutcome,
+    directory: &Path,
+) -> ProjectValidationOutcome {
+    match outcome {
+        ProjectValidationOutcome::Valid(mut project) => {
+            prepare_loaded_project(&mut project, directory);
+            ProjectValidationOutcome::Valid(project)
+        }
+        ProjectValidationOutcome::FrameGridRepair(mut project) => {
+            prepare_loaded_project(&mut project, directory);
+            ProjectValidationOutcome::FrameGridRepair(project)
+        }
+    }
+}
+
+fn prepare_loaded_project(project: &mut Project, directory: &Path) {
+    project.migrate_gaussian_items();
+    project.resolve_media_paths(directory);
     project.ensure_ids();
     project.normalize_media_relative_transforms();
-    Ok(project)
+}
+
+fn prepare_imported_outcome(outcome: ProjectValidationOutcome) -> ProjectValidationOutcome {
+    let prepare = |project: &mut Project| {
+        project.ensure_ids();
+        project.normalize_media_relative_transforms();
+    };
+    match outcome {
+        ProjectValidationOutcome::Valid(mut project) => {
+            prepare(&mut project);
+            ProjectValidationOutcome::Valid(project)
+        }
+        ProjectValidationOutcome::FrameGridRepair(mut project) => {
+            prepare(&mut project);
+            ProjectValidationOutcome::FrameGridRepair(project)
+        }
+    }
 }
 
 impl Project {
     pub fn frame_step(&self) -> Time {
         shrimply_math_core::time_from_frame(1, self.fps)
             .expect("project frame rate must be positive")
+    }
+
+    pub fn repair_frame_grid(&mut self) -> bool {
+        let frame_step = self.frame_step();
+        let mut changed = false;
+        for track in &mut self.caption_tracks {
+            let mut previous_end = None;
+            for item in &mut track.items {
+                changed |= repair_frame_aligned_times(
+                    &mut item.start,
+                    &mut item.end,
+                    &mut previous_end,
+                    self.fps,
+                    frame_step,
+                );
+            }
+        }
+        for track in self.video_tracks.iter_mut().chain(
+            self.folded_sequences
+                .iter_mut()
+                .flat_map(|sequence| &mut sequence.video_tracks),
+        ) {
+            let mut previous_end = None;
+            for item in &mut track.items {
+                changed |= repair_frame_aligned_times(
+                    &mut item.start,
+                    &mut item.end,
+                    &mut previous_end,
+                    self.fps,
+                    frame_step,
+                );
+            }
+        }
+        for track in self.audio_tracks.iter_mut().chain(
+            self.folded_sequences
+                .iter_mut()
+                .flat_map(|sequence| &mut sequence.audio_tracks),
+        ) {
+            let mut previous_end = None;
+            for item in &mut track.items {
+                changed |= repair_frame_aligned_times(
+                    &mut item.start,
+                    &mut item.end,
+                    &mut previous_end,
+                    self.fps,
+                    frame_step,
+                );
+            }
+        }
+        changed
     }
 
     pub fn has_timeline_items(&self) -> bool {
@@ -202,6 +321,11 @@ impl Project {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_without_frame_alignment()?;
+        validate_project_frame_alignment(self)
+    }
+
+    fn validate_without_frame_alignment(&self) -> Result<(), String> {
         if self.format_version != PROJECT_FORMAT_VERSION {
             return Err(format!(
                 "unsupported project format {}; expected {}",
@@ -287,7 +411,6 @@ impl Project {
             validate_folded_sequence(sequence)?;
         }
         validate_sequence_references(self)?;
-        validate_project_frame_alignment(self)?;
         Ok(())
     }
 
@@ -771,6 +894,32 @@ fn validate_track_times(
         previous_end = Some(end);
     }
     Ok(())
+}
+
+fn repair_frame_aligned_times(
+    start: &mut Time,
+    end: &mut Time,
+    previous_end: &mut Option<Time>,
+    fps: Fraction,
+    frame_step: Time,
+) -> bool {
+    let original_start = *start;
+    let original_end = *end;
+    let duration_frames = original_end
+        .saturating_sub(original_start)
+        .as_frame_ceil(fps)
+        .max(1);
+    let duration = shrimply_math_core::time_from_frame(duration_frames, fps)
+        .expect("validated project duration must fit the frame grid");
+    *start = original_start.snapped(frame_step);
+    if let Some(previous_end) = previous_end {
+        *start = (*start).max(*previous_end);
+    }
+    *end = original_end
+        .snapped(frame_step)
+        .max(start.saturating_add(duration));
+    *previous_end = Some(*end);
+    *start != original_start || *end != original_end
 }
 
 fn validate_project_frame_alignment(project: &Project) -> Result<(), String> {

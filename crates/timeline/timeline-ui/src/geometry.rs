@@ -41,8 +41,8 @@ pub(super) fn vertical_scrollbar(
         content_length: track_content_height,
         viewport_length: visible_height,
         value: view.scroll_y,
-        color: Color::LIGHT1,
-        outline_color: Color::<f32>::from_rgb8_alpha(0x00, 0x00, 0x0c, 0.95),
+        color: crate::theme::current().view_fg,
+        outline_color: crate::theme::current().scrollbar_outline,
         state,
     })
 }
@@ -61,8 +61,8 @@ pub(super) fn horizontal_scrollbar(
         content_length: duration_seconds.max(visible_seconds) + visible_seconds * 2.0,
         viewport_length: visible_seconds,
         value: view.scroll_seconds,
-        color: Color::LIGHT1,
-        outline_color: Color::<f32>::from_rgb8_alpha(0x00, 0x00, 0x0c, 0.95),
+        color: crate::theme::current().view_fg,
+        outline_color: crate::theme::current().scrollbar_outline,
         state,
     }
 }
